@@ -1,0 +1,149 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2025.2 (win64) Build 6299465 Fri Nov 14 19:35:11 GMT 2025
+| Date         : Sun Nov  1 17:22:10 2026
+| Host         : Thinkpad running 64-bit major release  (build 9200)
+| Command      : report_control_sets -verbose -file lbm_top_control_sets_placed.rpt
+| Design       : lbm_top
+| Device       : xc7a35t
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Control Set Information
+
+Table of Contents
+-----------------
+1. Summary
+2. Histogram
+3. Flip-Flop Distribution
+4. Detailed Control Set Information
+
+1. Summary
+----------
+
++----------------------------------------------------------+-------+
+|                          Status                          | Count |
++----------------------------------------------------------+-------+
+| Total control sets                                       |    71 |
+|    Minimum number of control sets                        |    71 |
+|    Addition due to synthesis replication                 |     0 |
+|    Addition due to physical synthesis replication        |     0 |
+| Unused register locations in slices containing registers |   213 |
++----------------------------------------------------------+-------+
+* Control sets can be merged at opt_design using control_set_merge or merge_equivalent_drivers
+** Run report_qor_suggestions for automated merging and remapping suggestions
+
+
+2. Histogram
+------------
+
++--------------------+-------+
+|       Fanout       | Count |
++--------------------+-------+
+| Total control sets |    71 |
+| >= 0 to < 4        |     2 |
+| >= 4 to < 6        |     3 |
+| >= 6 to < 8        |     4 |
+| >= 8 to < 10       |    11 |
+| >= 10 to < 12      |     2 |
+| >= 12 to < 14      |     1 |
+| >= 14 to < 16      |     1 |
+| >= 16              |    47 |
++--------------------+-------+
+* Control sets can be remapped at either synth_design or opt_design
+
+
+3. Flip-Flop Distribution
+-------------------------
+
++--------------+-----------------------+------------------------+-----------------+--------------+
+| Clock Enable | Synchronous Set/Reset | Asynchronous Set/Reset | Total Registers | Total Slices |
++--------------+-----------------------+------------------------+-----------------+--------------+
+| No           | No                    | No                     |            2043 |          485 |
+| No           | No                    | Yes                    |               0 |            0 |
+| No           | Yes                   | No                     |             593 |          157 |
+| Yes          | No                    | No                     |             497 |          153 |
+| Yes          | No                    | Yes                    |               0 |            0 |
+| Yes          | Yes                   | No                     |             142 |           42 |
++--------------+-----------------------+------------------------+-----------------+--------------+
+
+
+4. Detailed Control Set Information
+-----------------------------------
+
++----------------------+----------------------------------+----------------------------------------+------------------+----------------+--------------+
+|     Clock Signal     |           Enable Signal          |            Set/Reset Signal            | Slice Load Count | Bel Load Count | Bels / Slice |
++----------------------+----------------------------------+----------------------------------------+------------------+----------------+--------------+
+|  clk_IBUF_BUFG       | u_tx/tx_i_1_n_0                  | u_cmd/SR                               |                1 |              1 |         1.00 |
+|  clk_IBUF_BUFG       | u_cmd/cmd_err_i_1_n_0            |                                        |                1 |              1 |         1.00 |
+|  clk_IBUF_BUFG       | u_tx/bit_idx[3]_i_1_n_0          | u_cmd/SR                               |                1 |              4 |         4.00 |
+|  clk_IBUF_BUFG       |                                  | u_core/sweep_init_reg_n_0              |                3 |              4 |         1.33 |
+|  clk_IBUF_BUFG       |                                  | u_vga/vga_c/SR[0]                      |                2 |              5 |         2.50 |
+|  clk_IBUF_BUFG       | u_viz/cy[0]                      |                                        |                2 |              6 |         3.00 |
+|  clk_IBUF_BUFG       | u_core/sx[0]                     |                                        |                2 |              6 |         3.00 |
+|  clk_IBUF_BUFG       | u_viz/WEA[0]                     |                                        |                4 |              6 |         1.50 |
+|  clk_IBUF_BUFG       | u_core/sy[0]                     |                                        |                2 |              6 |         3.00 |
+|  clk_IBUF_BUFG       | u_cmd/tx_start_i_1_n_0           |                                        |                2 |              8 |         4.00 |
+|  clk_IBUF_BUFG       | u_cmd/a0__0[0]                   |                                        |                2 |              8 |         4.00 |
+|  clk_IBUF_BUFG       | u_cmd/a1[0]                      |                                        |                3 |              8 |         2.67 |
+|  clk_IBUF_BUFG       | u_cmd/a2[0]                      |                                        |                1 |              8 |         8.00 |
+|  clk_IBUF_BUFG       | u_cmd/a3[0]                      |                                        |                2 |              8 |         4.00 |
+|  clk_IBUF_BUFG       | u_cmd/cmd[0]                     |                                        |                2 |              8 |         4.00 |
+|  clk_IBUF_BUFG       | u_rx/valid_i_1_n_0               |                                        |                3 |              8 |         2.67 |
+|  clk_IBUF_BUFG       | u_rx/shreg[0]                    |                                        |                1 |              8 |         8.00 |
+|  clk_IBUF_BUFG       | u_sync/hc[9]_i_1_n_0             | u_sync/vc[9]_i_1_n_0                   |                2 |              9 |         4.50 |
+|  clk_IBUF_BUFG       | u_sync/tick                      | u_sync/hc[9]_i_1_n_0                   |                5 |              9 |         1.80 |
+|  clk_IBUF_BUFG       | u_cmd/SR                         |                                        |                2 |              9 |         4.50 |
+|  u_vga/vga_c/w_25MHz | u_vga/vga_c/v_count_next_1[0]    |                                        |                4 |             10 |         2.50 |
+|  u_vga/vga_c/w_25MHz |                                  |                                        |                4 |             10 |         2.50 |
+|  clk_IBUF_BUFG       |                                  | u_sync/vgaRed[3]_i_1_n_0               |                4 |             12 |         3.00 |
+|  clk_IBUF_BUFG       | u_rx/cnt[0]                      | u_rx/cnt[15]_i_1_n_0                   |                4 |             15 |         3.75 |
+|  clk_IBUF_BUFG       | u_core/clean_cnt[0]              | u_core/clean_cnt[15]_i_1_n_0           |                5 |             16 |         3.20 |
+|  clk_IBUF_BUFG       | u_viz/jxN[0]                     |                                        |                4 |             16 |         4.00 |
+|  clk_IBUF_BUFG       | u_viz/jxS[0]                     |                                        |                4 |             16 |         4.00 |
+|  clk_IBUF_BUFG       | u_viz/jyE[0]                     |                                        |                5 |             16 |         3.20 |
+|  clk_IBUF_BUFG       | u_viz/jyW[0]                     |                                        |                5 |             16 |         3.20 |
+|  clk_IBUF_BUFG       | u_cmd/gain1[15]_i_1_n_0          |                                        |                6 |             16 |         2.67 |
+|  clk_IBUF_BUFG       | u_cmd/gain0[15]_i_1_n_0          |                                        |                5 |             16 |         3.20 |
+|  clk_IBUF_BUFG       | u_tx/tx_busy                     | u_cmd/SR                               |                5 |             16 |         3.20 |
+|  clk_IBUF_BUFG       | u_cmd/omega_e[15]_i_1_n_0        |                                        |                5 |             16 |         3.20 |
+|  clk_IBUF_BUFG       | u_cmd/omega_o[15]_i_1_n_0        |                                        |                5 |             16 |         3.20 |
+|  clk_IBUF_BUFG       | u_cmd/gain2[15]_i_1_n_0          |                                        |                7 |             16 |         2.29 |
+|  clk_IBUF_BUFG       | u_cmd/spf[15]_i_1_n_0            |                                        |                6 |             16 |         2.67 |
+|  clk_IBUF_BUFG       | u_cmd/uin_x[15]_i_1_n_0          |                                        |                5 |             16 |         3.20 |
+|  clk_IBUF_BUFG       | u_cmd/uin_y[15]_i_1_n_0          |                                        |                4 |             16 |         4.00 |
+|  clk_IBUF_BUFG       | u_core/div_ev                    |                                        |                4 |             16 |         4.00 |
+|  clk_IBUF_BUFG       | u_vga/vga_c/vs_d_reg             |                                        |                4 |             16 |         4.00 |
+|  clk_IBUF_BUFG       |                                  | u_core/r19_h306_in                     |                4 |             18 |         4.50 |
+|  clk_IBUF_BUFG       |                                  | u_core/r19_h407_in                     |                4 |             18 |         4.50 |
+|  clk_IBUF_BUFG       |                                  | u_core/r19_h508_in                     |                5 |             18 |         3.60 |
+|  clk_IBUF_BUFG       |                                  | u_core/r19_h609_in                     |                5 |             18 |         3.60 |
+|  clk_IBUF_BUFG       |                                  | u_core/r19_h8011_in                    |                5 |             18 |         3.60 |
+|  clk_IBUF_BUFG       |                                  | u_core/r5_jy_reg[17]_i_1_n_1           |                5 |             18 |         3.60 |
+|  clk_IBUF_BUFG       |                                  | u_core/r5_jx_reg[17]_i_1_n_1           |                4 |             18 |         4.50 |
+|  clk_IBUF_BUFG       |                                  | u_core/r6_s_reg[17]_i_1_n_2            |                5 |             18 |         3.60 |
+|  clk_IBUF_BUFG       |                                  | u_core/r6_t_reg[17]_i_1_n_2            |                4 |             18 |         4.50 |
+|  clk_IBUF_BUFG       | u_viz/vort[0]                    |                                        |                5 |             18 |         3.60 |
+|  clk_IBUF_BUFG       |                                  | u_core/o_h0_reg[17]_i_1_n_0            |                4 |             18 |         4.50 |
+|  clk_IBUF_BUFG       | u_cmd/m_we_i_1_n_0               |                                        |                4 |             18 |         4.50 |
+|  clk_IBUF_BUFG       |                                  | u_core/r19_h7010_in                    |                4 |             18 |         4.50 |
+|  clk_IBUF_BUFG       |                                  | u_core/r19_h205_in                     |                5 |             18 |         3.60 |
+|  clk_IBUF_BUFG       |                                  | u_core/r19_h1012_in                    |                3 |             18 |         6.00 |
+|  clk_IBUF_BUFG       | u_cmd/txb0[0]                    |                                        |                6 |             18 |         3.00 |
+|  clk_IBUF_BUFG       |                                  | u_br/cnt[0]_i_1__1_n_0                 |                5 |             20 |         4.00 |
+|  clk_IBUF_BUFG       |                                  | u_bc/cnt[0]_i_1__0_n_0                 |                5 |             20 |         4.00 |
+|  clk_IBUF_BUFG       | u_viz/FSM_onehot_ph_reg_n_0_[12] |                                        |                7 |             21 |         3.00 |
+|  clk_IBUF_BUFG       |                                  | u_core/u_m3/g_sr.sr_reg[2][16]__0_1[0] |                4 |             22 |         5.50 |
+|  clk_IBUF_BUFG       | led_OBUF[1]                      | u_rx/valid                             |                6 |             23 |         3.83 |
+|  clk_IBUF_BUFG       | led_OBUF[2]                      | u_cmd/cmd_ok                           |                6 |             23 |         3.83 |
+|  clk_IBUF_BUFG       |                                  | u_cmd/tmo[0]_i_1_n_0                   |                6 |             24 |         4.00 |
+|  clk_IBUF_BUFG       | led_OBUF[6]                      | u_core/div_event                       |                7 |             26 |         3.71 |
+|  clk_IBUF_BUFG       | u_cmd/remain[15]_i_1_n_0         |                                        |               10 |             26 |         2.60 |
+|  clk_IBUF_BUFG       | u_viz/Q[0]                       |                                        |               11 |             32 |         2.91 |
+|  clk_IBUF_BUFG       | u_core/cur                       |                                        |                8 |             32 |         4.00 |
+|  clk_IBUF_BUFG       |                                  | u_core/u_m3/g_sr.sr_reg[2][16]__0_0[0] |                7 |             42 |         6.00 |
+|  clk_IBUF_BUFG       |                                  | u_core/u_m23/m_a23[1]                  |                9 |             48 |         5.33 |
+|  clk_IBUF_BUFG       |                                  | u_core/ovr2                            |               55 |            162 |         2.95 |
+|  clk_IBUF_BUFG       |                                  |                                        |              481 |           2658 |         5.53 |
++----------------------+----------------------------------+----------------------------------------+------------------+----------------+--------------+
+
+
