@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LBM FPGA Control</title>
+<style>
+  :root {
+    --bg: #0e1217; --panel: #161b22; --panel2: #1c232c; --line: #2b3441;
+    --text: #e7eaef; --muted: #96a1b0; --accent: #4cc2ff; --accent-ink: #03202e;
+    --good: #3ddc97; --warn: #ffb454; --bad: #ff6b6b;
+    --fluid: #0b1a33; --solid: #9aa3ae; --inlet: #2ecc71; --outlet: #ff9f43;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f2f4f7; --panel: #ffffff; --panel2: #eef1f5; --line: #d5dbe3;
+      --text: #1a2029; --muted: #5b6676; --accent: #0a7fc2; --accent-ink: #ffffff;
+      --good: #12935f; --warn: #b36b00; --bad: #c93636;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  header h1 small { color: var(--muted); font-weight: 400; margin-left: 8px; }
+  .conn { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.ok { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 16px; max-width: 1240px; margin: 0 auto; }
+  @media (max-width: 960px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 16px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .row:last-child { margin-bottom: 0; }
+  label { color: var(--muted); }
+  button, select { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 6px 11px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .seg { display: inline-flex; } .seg button { border-radius: 0; margin-left: -1px; } .seg button:first-child { border-radius: 7px 0 0 7px; margin-left: 0; }
+  .seg button:last-child { border-radius: 0 7px 7px 0; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(128,128,128,.5); }
+  .slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin-bottom: 12px; }
+  .slider label { grid-column: 1; } .slider output { grid-column: 2; font-variant-numeric: tabular-nums; }
+  .slider input { grid-column: 1 / span 2; width: 100%; accent-color: var(--accent); }
+  .stage { position: relative; }
+  #grid { width: 100%; height: auto; aspect-ratio: 4 / 3; image-rendering: pixelated; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--fluid); touch-action: none; cursor: crosshair; display: block; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); }
+  .chip.warn { color: var(--warn); border-color: var(--warn); } .chip.good { color: var(--good); border-color: var(--good); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-variant-numeric: tabular-nums; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  #log { height: 150px; overflow: auto; font: 12px/1.4 ui-monospace, Consolas, monospace; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px; white-space: pre-wrap; }
+  #log .err { color: var(--bad); } #log .ok { color: var(--good); } #log .dim { color: var(--muted); }
+  canvas#legend { width: 100%; height: 14px; border-radius: 4px; display: block; border: 1px solid var(--line); }
+  .legend-scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  #unsupported { display: none; background: var(--bad); color: #fff; padding: 10px 16px; }
+  input[type=checkbox] { accent-color: var(--accent); }
+  .banner { margin-top: 8px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--warn); color: var(--warn); font-size: 13px; }
+  .banner[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div id="unsupported">This browser has no Web Serial API. Open this page in desktop Chrome or Edge (from a local file or http://localhost).</div>
+<header>
+  <h1>D2Q9 lattice-Boltzmann <small>Basys 3 control panel</small></h1>
+  <div class="conn">
+    <label for="baud">Baud</label>
+    <select id="baud">
+      <option value="115200" selected>115200</option>
+      <option value="230400">230400</option>
+      <option value="460800">460800</option>
+      <option value="921600">921600</option>
+    </select>
+    <button id="btnConnect" class="primary">Connect to FPGA</button>
+    <span class="dot" id="dot"></span><span id="connText">not connected</span>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="card">
+      <h2>Geometry &mdash; 64 &times; 48 cells, each drawn as 10 &times; 10 pixels on the VGA output</h2>
+      <div class="row">
+        <div class="seg" role="group" aria-label="Tool">
+          <button id="toolPaint" class="on">Paint</button>
+          <button id="toolShape">Shape</button>
+        </div>
+        <span class="hint">Material</span>
+        <div class="seg" role="group" aria-label="Material">
+          <button data-mat="1" class="on"><span class="sw" style="background:var(--solid)"></span>Wall</button>
+          <button data-mat="0"><span class="sw" style="background:var(--fluid)"></span>Erase</button>
+          <button data-mat="2"><span class="sw" style="background:var(--inlet)"></span>Inlet</button>
+          <button data-mat="3"><span class="sw" style="background:var(--outlet)"></span>Outlet</button>
+        </div>
+      </div>
+      <div class="stage"><canvas id="grid" width="640" height="480" aria-label="Geometry editor"></canvas></div>
+      <div class="row" id="paintOpts" style="margin-top:10px">
+        <div class="slider" style="flex:1;margin:0;min-width:200px">
+          <label for="brush">Brush radius</label><output id="brushOut">1</output>
+          <input id="brush" type="range" min="0" max="8" step="1" value="1">
+        </div>
+      </div>
+      <div id="shapeOpts" style="display:none;margin-top:10px">
+        <div class="row">
+          <label for="shapeKind">Shape</label>
+          <select id="shapeKind">
+            <option value="ellipse">Circle / ellipse</option>
+            <option value="rect">Rectangle / plate</option>
+            <option value="triangle">Wedge (triangle)</option>
+            <option value="diamond">Diamond</option>
+            <option value="airfoil">Airfoil (NACA 4-digit, symmetric)</option>
+          </select>
+          <span class="hint" id="shapeHelp">Click to stamp, right-click to cut a hole.</span>
+        </div>
+        <div class="slider"><label for="shW">Length (cells)</label><output id="shWOut">11</output><input id="shW" type="range" min="1" max="60" value="11"></div>
+        <div class="slider"><label for="shH" id="shHLabel">Height (cells)</label><output id="shHOut">11</output><input id="shH" type="range" min="1" max="44" value="11"></div>
+        <div class="slider"><label for="shA">Rotation (degrees clockwise)</label><output id="shAOut">0</output><input id="shA" type="range" min="-90" max="90" value="0"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <span class="hint">Presets</span>
+        <button data-preset="cylinder">Cylinder</button>
+        <button data-preset="square">Square</button>
+        <button data-preset="plate">Flat plate</button>
+        <button data-preset="wedge">Wedge</button>
+        <button data-preset="airfoil">Airfoil</button>
+        <button data-preset="twocyl">Two cylinders</button>
+        <button data-preset="step">Backward step</button>
+        <button data-preset="cavity">Lid-driven cavity</button>
+        <button data-preset="empty">Empty channel</button>
+      </div>
+      <div class="row">
+        <button id="btnImage">Import image&hellip;</button>
+        <input id="fileImage" type="file" accept="image/*" hidden>
+        <button id="btnClearObj">Clear objects</button>
+        <button id="btnUndo">Undo</button>
+        <label><input id="autoSend" type="checkbox" checked> send changes live</label>
+        <button id="btnSendMask">Send geometry now</button>
+      </div>
+      <div class="hint">Wall = bounce-back. Inlet = cells forced to the inlet velocity (an inflow column, or a moving lid). Outlet = pressure outlet: the density is held at the reference and the velocity is taken from the cell to its west, so keep it on the right edge. It is what keeps the pressure level of the whole channel from drifting.
+        Draw walls along the top and bottom edges yourself or use a preset &mdash; edges wrap around.</div>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>Flow</h2>
+      <div class="slider"><label for="uIn">Inlet speed (lattice units)</label><output id="uInOut">0.10</output><input id="uIn" type="range" min="0" max="0.25" step="0.005" value="0.10"></div>
+      <div class="slider"><label for="uAng">Inlet angle (degrees)</label><output id="uAngOut">0</output><input id="uAng" type="range" min="-45" max="45" step="1" value="0"></div>
+      <div class="slider"><label for="omega">Relaxation &omega; (higher = thinner fluid)</label><output id="omegaOut">1.88</output><input id="omega" type="range" min="1.0" max="1.96" step="0.01" value="1.88"></div>
+      <div class="kv">
+        <span>Viscosity &nu;</span><span id="nuOut">&ndash;</span>
+        <span>Object size L</span><span id="lOut">&ndash;</span>
+        <span>Reynolds number</span><span id="reOut">&ndash;</span>
+      </div>
+      <div style="margin-top:8px"><span id="stab" class="chip good">stable region</span></div>
+      <div class="hint" style="margin-top:6px">Speeds are in lattice units (cells per step). Peak local speed is about 1.5&ndash;2&times; the inlet speed and must stay well under 0.3; the limit gets tighter as &omega; approaches 2.</div>
+    </div>
+
+    <div class="card">
+      <h2>Simulation</h2>
+      <div class="slider"><label for="spf">Steps per video frame (60 fps)</label><output id="spfOut">16</output><input id="spf" type="range" min="0" max="500" step="1" value="16"></div>
+      <div class="row">
+        <button id="btnRun" class="primary">Pause</button>
+        <button id="btnInit">Re-initialise flow</button>
+        <button id="btnStep">Single step</button>
+      </div>
+      <div class="kv" style="margin-top:8px">
+        <span>Steps run</span><span id="stepOut">&ndash;</span>
+        <span>Rate</span><span id="rateOut">&ndash;</span>
+        <span>Max rate</span><span>about 530 steps per frame</span>
+        <span>Blow-up guard</span><span id="guardOut">&ndash;</span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label><input id="guard" type="checkbox" checked> auto-recover from blow-ups</label>
+      </div>
+      <div id="haltBanner" class="banner" hidden>Stopped after repeated blow-ups: these settings are unstable. Lower the inlet speed or &omega;; moving any control restarts the run.</div>
+    </div>
+
+    <div class="card">
+      <h2>Display</h2>
+      <div class="row">
+        <div class="seg" role="group" aria-label="View mode">
+          <button data-viz="0" class="on">Speed</button>
+          <button data-viz="1">Density</button>
+          <button data-viz="2">Vorticity</button>
+        </div>
+      </div>
+      <div class="slider"><label for="fs" id="fsLabel">Full-scale speed</label><output id="fsOut">0.20</output><input id="fs" type="range" min="0.03" max="0.40" step="0.01" value="0.20"></div>
+      <canvas id="legend" width="256" height="1"></canvas>
+      <div class="legend-scale"><span id="legLo">0</span><span id="legMid"></span><span id="legHi">0.20</span></div>
+      <div class="hint" style="margin-top:6px" id="vizHelp">Dark blue = still, red = fast.</div>
+    </div>
+
+    <div class="card">
+      <h2>Link</h2>
+      <div id="log" role="log" aria-live="polite"></div>
+      <div class="row" style="margin-top:8px"><button id="btnPing">Ping</button><button id="btnSyncAll">Re-send everything</button></div>
+      <div class="hint">Picture flashing or going black? Flip <b>SW15</b> on the board: it switches the VGA timing between the library (down) and a conventional generator (up).</div>
+    </div>
+  </aside>
+</main>
+
+<script id="core">
+/* ------------------------------------------------------------------
+   Pure logic: protocol, geometry, presets, palettes. No DOM access, so it
+   can be tested under Node (see sw/test_core.js).
+   ------------------------------------------------------------------ */
+(function (g) {
+  'use strict';
+  var NX = 64, NY = 48, NCELL = NX * NY, NBYTES = NCELL / 4;
+  var FLUID = 0, SOLID = 1, INLET = 2, OUTLET = 3;
+  var REG = { OMEGA_E: 0, OMEGA_O: 1, UIN_X: 2, UIN_Y: 3, SPF: 4, VIZ_MODE: 5,
+              GAIN0: 6, GAIN1: 7, GAIN2: 8, GUARD: 9, STEP_LO: 0x10, STEP_HI: 0x11, STATUS: 0x12, DIV_COUNT: 0x13 };
+  var OP = { PING: 0x01, SETREG: 0x02, CMD: 0x03, WMASK: 0x04, GETREG: 0x07 };
+
+  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+  /* ---------------- UART protocol (see rtl/uart_cmd.v) ---------------- */
+  function pkt(op, args) {
+    var a = new Uint8Array(2 + args.length);
+    a[0] = 0xA5; a[1] = op;
+    for (var i = 0; i < args.length; i++) a[2 + i] = args[i] & 0xFF;
+    return a;
+  }
+  function pktPing() { return pkt(OP.PING, []); }
+  function pktSetReg(reg, v) { v = v & 0xFFFF; return pkt(OP.SETREG, [reg, v >> 8, v & 0xFF]); }
+  function pktGetReg(reg) { return pkt(OP.GETREG, [reg]); }
+  function pktCmd(op) { return pkt(OP.CMD, [op]); }          // 0 = re-initialise, 1 = single step
+  function pktWriteMask(addr, bytes) {
+    var len = bytes.length, a = new Uint8Array(6 + len);
+    a[0] = 0xA5; a[1] = OP.WMASK;
+    a[2] = (addr >> 8) & 0xFF; a[3] = addr & 0xFF; a[4] = (len >> 8) & 0xFF; a[5] = len & 0xFF;
+    a.set(bytes, 6);
+    return a;
+  }
+
+  /* cell p = y*64 + x lives in byte p>>2, bits [2*(p%4)+1 : 2*(p%4)] */
+  function packMask(cells) {
+    var out = new Uint8Array(NBYTES);
+    for (var p = 0; p < NCELL; p++) out[p >> 2] |= (cells[p] & 3) << (2 * (p & 3));
+    return out;
+  }
+
+  /* packets covering the bytes that differ between two packed masks (or all of them) */
+  function maskPackets(packed, prev, chunk) {
+    var lo = 0, hi = NBYTES - 1;
+    if (prev) {
+      while (lo < NBYTES && packed[lo] === prev[lo]) lo++;
+      if (lo === NBYTES) return [];
+      while (hi > lo && packed[hi] === prev[hi]) hi--;
+    }
+    var out = [];
+    for (var a = lo; a <= hi; a += chunk) {
+      var e = Math.min(hi + 1, a + chunk);
+      out.push(pktWriteMask(a, packed.subarray(a, e)));
+    }
+    return out;
+  }
+
+  /* parameter encodings */
+  function q14(w) { return clamp(Math.round(w * 16384), 0, 65535); }               // omega, Q2.14
+  function q16s(u) { return clamp(Math.round(u * 65536), -32768, 32767) & 0xFFFF; }  // velocity, signed Q0.16
+  /* colour gain for a view mode: speed maps 0..fs to 0..255, density / vorticity map +-fs to 0..255 */
+  function gainFor(mode, fs) { return clamp(Math.round((mode === 0 ? 255 : 127) / fs), 1, 65535); }
+
+  function inletVelocity(speed, angleDeg) {
+    var a = angleDeg * Math.PI / 180;
+    return { ux: speed * Math.cos(a), uy: speed * Math.sin(a) };
+  }
+
+  /* ---------------- stability guidance (measured on the default cylinder with the
+                    fixed-point reference model, sw/lbm_model.py) ---------------- */
+  function uSafe(omega) { return omega <= 1.55 ? 0.25 : omega <= 1.75 ? 0.20 : omega <= 1.92 ? 0.15 : 0.10; }
+  function nuFromOmega(omega) { return (1 / omega - 0.5) / 3; }
+
+  /* characteristic object height: vertical extent of interior walls (frame excluded) */
+  function objectSize(cells) {
+    var ymin = NY, ymax = -1;
+    for (var y = 2; y < NY - 2; y++)
+      for (var x = 2; x < NX - 2; x++)
+        if (cells[y * NX + x] === SOLID) { if (y < ymin) ymin = y; if (y > ymax) ymax = y; }
+    return ymax < 0 ? 0 : ymax - ymin + 1;
+  }
+
+  /* ---------------- shape rasteriser ---------------- */
+  /* (u, v) is the cell offset in the shape's own frame; the nose points to -u,
+     i.e. upstream when the rotation is 0. */
+  function inShape(kind, u, v, w, h) {
+    var a, b, k, x, t;
+    switch (kind) {
+      case 'ellipse':
+        a = w / 2; b = h / 2;
+        return (u * u) * (b * b) + (v * v) * (a * a) <= (a * a) * (b * b);
+      case 'rect':
+        return Math.abs(u) <= w / 2 && Math.abs(v) <= h / 2;
+      case 'diamond':
+        return Math.abs(u) * (h / 2) + Math.abs(v) * (w / 2) <= (w / 2) * (h / 2);
+      case 'triangle':
+        if (u < -w / 2 || u > w / 2) return false;
+        k = (u + w / 2) / w;                         // 0 at the apex, 1 at the base
+        return Math.abs(v) <= (h / 2) * k;
+      case 'airfoil':
+        if (u < -w / 2 || u > w / 2) return false;
+        x = (u + w / 2) / w;                         // 0 leading edge .. 1 trailing edge
+        t = h / w;                                   // thickness / chord
+        return Math.abs(v) <= 5 * t * w * (0.2969 * Math.sqrt(x) - 0.1260 * x - 0.3516 * x * x +
+                                            0.2843 * x * x * x - 0.1015 * x * x * x * x);
+      default:
+        return false;
+    }
+  }
+
+  /* stamp a shape centred at (cx, cy) (cell units, fractional) onto cells */
+  function stamp(cells, kind, cx, cy, w, h, angDeg, val) {
+    var th = angDeg * Math.PI / 180, c = Math.cos(th), s = Math.sin(th);
+    var R = Math.ceil(Math.max(w, h)) + 2;
+    var y0 = Math.max(0, Math.floor(cy) - R), y1 = Math.min(NY - 1, Math.floor(cy) + R);
+    var x0 = Math.max(0, Math.floor(cx) - R), x1 = Math.min(NX - 1, Math.floor(cx) + R);
+    for (var y = y0; y <= y1; y++) {
+      for (var x = x0; x <= x1; x++) {
+        var dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+        var u = dx * c + dy * s, v = -dx * s + dy * c;
+        if (inShape(kind, u, v, w, h)) cells[y * NX + x] = val;
+      }
+    }
+  }
+
+  /* Centre coordinate for a shape of the given size placed on cell index i, so the shape
+     covers exactly `size` cells: odd sizes centre on the cell, even sizes on its corner. */
+  function snap(i, size) { return Math.round(size) % 2 === 1 ? i + 0.5 : i + 1; }
+
+  /* which cells a stamp / brush would change, for the hover preview */
+  function shapeCells(kind, cx, cy, w, h, angDeg) {
+    var tmp = new Uint8Array(NCELL);
+    stamp(tmp, kind, cx, cy, w, h, angDeg, 1);
+    return tmp;
+  }
+
+  function brush(cells, x, y, r, val) {
+    for (var yy = Math.max(0, y - r); yy <= Math.min(NY - 1, y + r); yy++)
+      for (var xx = Math.max(0, x - r); xx <= Math.min(NX - 1, x + r); xx++)
+        if ((xx - x) * (xx - x) + (yy - y) * (yy - y) <= r * r + r) cells[yy * NX + xx] = val;
+  }
+
+  /* ---------------- frames and presets ---------------- */
+  function newCells() { return new Uint8Array(NCELL); }
+
+  function frameChannel(c) {              // walls top + bottom, inlet left, outlet right
+    c.fill(FLUID);
+    var x, y;
+    for (x = 0; x < NX; x++) { c[x] = SOLID; c[(NY - 1) * NX + x] = SOLID; }
+    for (y = 1; y < NY - 1; y++) { c[y * NX] = INLET; c[y * NX + NX - 1] = OUTLET; }
+    return c;
+  }
+
+  function frameBox(c) {                  // walls all round
+    c.fill(FLUID);
+    var x, y;
+    for (x = 0; x < NX; x++) { c[x] = SOLID; c[(NY - 1) * NX + x] = SOLID; }
+    for (y = 0; y < NY; y++) { c[y * NX] = SOLID; c[y * NX + NX - 1] = SOLID; }
+    return c;
+  }
+
+  var presets = {
+    empty:    function () { return frameChannel(newCells()); },
+    /* identical to the scenario the FPGA boots with (rtl/mask_ram.v) */
+    cylinder: function () { var c = frameChannel(newCells()); stamp(c, 'ellipse', 16.5, 23.5, 10, 10, 0, SOLID); return c; },
+    /* odd sizes centred on a cell centre; the half-cell offset from the channel's mid-line
+       (like the cylinder) lets the wake become unsteady sooner */
+    square:   function () { var c = frameChannel(newCells()); stamp(c, 'rect', 16.5, 23.5, 11, 11, 0, SOLID); return c; },
+    plate:    function () { var c = frameChannel(newCells()); stamp(c, 'rect', 16.5, 23.5, 3, 19, 0, SOLID); return c; },
+    wedge:    function () { var c = frameChannel(newCells()); stamp(c, 'triangle', 18.5, 23.5, 17, 15, 0, SOLID); return c; },
+    airfoil:  function () { var c = frameChannel(newCells()); stamp(c, 'airfoil', 22.5, 23.5, 29, 5, 12, SOLID); return c; },
+    twocyl:   function () {
+      var c = frameChannel(newCells());
+      stamp(c, 'ellipse', 14.5, 16.5, 9, 9, 0, SOLID);
+      stamp(c, 'ellipse', 14.5, 31.5, 9, 9, 0, SOLID);
+      return c;
+    },
+    step:     function () {
+      var c = frameChannel(newCells()), x, y;
+      for (y = 24; y < NY; y++) for (x = 0; x <= 20; x++) c[y * NX + x] = SOLID;
+      return c;
+    },
+    cavity:   function () {                 // set the inlet angle to 0: the top row is a moving lid
+      var c = frameBox(newCells()), x;
+      for (x = 1; x < NX - 1; x++) c[x] = INLET;
+      return c;
+    }
+  };
+
+  /* image data (64 x 48 RGBA) -> walls: dark, opaque pixels become solid inside the channel */
+  function wallsFromImage(rgba) {
+    var c = frameChannel(newCells());
+    for (var y = 1; y < NY - 1; y++) {
+      for (var x = 1; x < NX - 1; x++) {
+        var i = 4 * (y * NX + x);
+        var lum = 0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2];
+        if (rgba[i + 3] >= 128 && lum < 128) c[y * NX + x] = SOLID;
+      }
+    }
+    return c;
+  }
+
+  /* ---------------- palettes: mirror rtl/display_path.v, 4 bits per channel ---------------- */
+  function ramp(v, c) {
+    var t = 382 - (Math.abs(v - c) << 2);
+    return t < 0 ? 0 : t > 255 ? 15 : (t >> 4) & 15;
+  }
+  function jet(v) { return [ramp(v, 192), ramp(v, 128), ramp(v, 64)]; }
+  function diverge(v) {
+    var a, g, hi, lo;
+    if (v >= 128) {
+      a = v - 128; g = a << 2; hi = (a >> 3) & 15;
+      lo = g > 255 ? Math.min(15, (g - 255) >> 4) : 0;
+      return [hi, lo, 0];
+    }
+    a = 128 - v; g = a << 2; hi = a > 119 ? 15 : (a >> 3) & 15;
+    lo = g > 255 ? Math.min(15, (g - 255) >> 4) : 0;
+    return [0, lo, hi];
+  }
+  function palette(mode, v) { return mode === 0 ? jet(v) : diverge(v); }
+
+  g.LBMCore = {
+    NX: NX, NY: NY, NCELL: NCELL, NBYTES: NBYTES,
+    FLUID: FLUID, SOLID: SOLID, INLET: INLET, OUTLET: OUTLET, REG: REG, OP: OP,
+    pktPing: pktPing, pktSetReg: pktSetReg, pktGetReg: pktGetReg, pktCmd: pktCmd, pktWriteMask: pktWriteMask,
+    packMask: packMask, maskPackets: maskPackets, q14: q14, q16s: q16s, gainFor: gainFor,
+    inletVelocity: inletVelocity, uSafe: uSafe, nuFromOmega: nuFromOmega, objectSize: objectSize,
+    inShape: inShape, stamp: stamp, snap: snap, shapeCells: shapeCells, brush: brush,
+    presets: presets, wallsFromImage: wallsFromImage, palette: palette, clamp: clamp
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
+
+<script id="ui">
+(function () {
+  'use strict';
+  var C = window.LBMCore;
+  var NX = C.NX, NY = C.NY, CELL = 10;
+  function $(id) { return document.getElementById(id); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /* ---------------- state ---------------- */
+  var S = {
+    cells: C.presets.cylinder(),
+    omega: 1.88, u: 0.10, ang: 0, spf: 16, spfBeforePause: 16, viz: 0, guard: true,
+    fs: [0.20, 0.06, 0.10],
+    tool: 'paint', mat: C.SOLID, brush: 1,
+    shape: { kind: 'ellipse', w: 11, h: 11, ang: 0 },
+    undo: [], hover: null, drawing: false, lastCell: -1
+  };
+
+  /* ---------------- log ---------------- */
+  function logLine(msg, cls) {
+    var el = $('log'), d = document.createElement('div');
+    if (cls) d.className = cls;
+    d.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+    el.appendChild(d);
+    while (el.childNodes.length > 200) el.removeChild(el.firstChild);
+    el.scrollTop = el.scrollHeight;
+  }
+  function hex(a) { return Array.prototype.map.call(a, function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join(' '); }
+
+  /* ---------------- serial link ---------------- */
+  var link = { port: null, writer: null, reader: null, rx: [], chain: Promise.resolve(),
+               lastMask: null, connected: false, fpgaOk: false, poll: null, lastSteps: null, lastStepsT: 0 };
+
+  function setStatus(kind, text) {
+    $('dot').className = 'dot ' + (kind || '');
+    $('connText').textContent = text;
+    $('btnConnect').textContent = link.connected ? 'Disconnect' : 'Connect to FPGA';
+  }
+
+  /* run link operations one at a time so replies never interleave */
+  function enqueue(fn) {
+    var run = link.chain.then(function () { return fn(); });
+    link.chain = run.catch(function () {});
+    return run;
+  }
+  async function writeBytes(bytes) {
+    if (!link.writer) throw new Error('not connected');
+    await link.writer.write(bytes);
+  }
+  async function readExact(n, timeoutMs) {
+    var t0 = performance.now();
+    while (link.rx.length < n) {
+      if (performance.now() - t0 > timeoutMs) throw new Error('no reply from the FPGA');
+      await sleep(4);
+    }
+    return link.rx.splice(0, n);
+  }
+  async function readLoop(port) {
+    while (port.readable && link.port === port) {
+      var reader = port.readable.getReader();
+      link.reader = reader;
+      try {
+        for (;;) {
+          var r = await reader.read();
+          if (r.done) break;
+          if (r.value) for (var i = 0; i < r.value.length; i++) link.rx.push(r.value[i]);
+        }
+      } catch (e) {
+        logLine('read error: ' + e.message, 'err');
+      } finally {
+        reader.releaseLock();
+      }
+    }
+  }
+
+  async function doPing() {
+    return enqueue(async function () {
+      link.rx.length = 0;
+      await writeBytes(C.pktPing());
+      var r = await readExact(4, 700);
+      return r[0] === 0x4C && r[1] === 0x42 && r[2] === 0x4D ? r[3] : -1;
+    });
+  }
+  async function getReg(reg) {
+    return enqueue(async function () {
+      link.rx.length = 0;
+      await writeBytes(C.pktGetReg(reg));
+      var r = await readExact(2, 500);
+      return (r[0] << 8) | r[1];
+    });
+  }
+  function sendRaw(bytes, note) {
+    if (!link.connected) return Promise.resolve();
+    return enqueue(async function () {
+      await writeBytes(bytes);
+      if (note) logLine('> ' + note, 'dim');
+    }).catch(function (e) { logLine(e.message, 'err'); });
+  }
+
+  /* ---- parameters ---- */
+  function velocity() { return C.inletVelocity(S.u, S.ang); }
+  function sendParam(name) {
+    var R = C.REG, v = velocity();
+    switch (name) {
+      case 'omega':
+        return sendRaw(C.pktSetReg(R.OMEGA_E, C.q14(S.omega)), 'omega ' + S.omega.toFixed(2))
+          .then(function () { return sendRaw(C.pktSetReg(R.OMEGA_O, C.q14(S.omega))); });
+      case 'vel':
+        return sendRaw(C.pktSetReg(R.UIN_X, C.q16s(v.ux)), 'inlet velocity ' + v.ux.toFixed(3) + ', ' + v.uy.toFixed(3))
+          .then(function () { return sendRaw(C.pktSetReg(R.UIN_Y, C.q16s(v.uy))); });
+      case 'spf':
+        return sendRaw(C.pktSetReg(R.SPF, S.spf), 'steps per frame ' + S.spf);
+      case 'viz':
+        return sendRaw(C.pktSetReg(R.VIZ_MODE, S.viz), 'view mode ' + S.viz);
+      case 'guard':
+        return sendRaw(C.pktSetReg(R.GUARD, S.guard ? 1 : 0), 'blow-up guard ' + (S.guard ? 'on' : 'off'));
+      case 'gain':
+        return sendRaw(C.pktSetReg(R.GAIN0, C.gainFor(0, S.fs[0])))
+          .then(function () { return sendRaw(C.pktSetReg(R.GAIN1, C.gainFor(1, S.fs[1]))); })
+          .then(function () { return sendRaw(C.pktSetReg(R.GAIN2, C.gainFor(2, S.fs[2])), 'colour scale'); });
+      default: return Promise.resolve();
+    }
+  }
+  var timers = {};
+  function later(name, fn, ms) { clearTimeout(timers[name]); timers[name] = setTimeout(fn, ms); }
+
+  /* ---- geometry (only the bytes that changed are sent) ---- */
+  function sendMask(force) {
+    if (!link.connected) return Promise.resolve();
+    return enqueue(async function () {
+      var packed = C.packMask(S.cells);
+      var pk = C.maskPackets(packed, force ? null : link.lastMask, 192);
+      for (var i = 0; i < pk.length; i++) await writeBytes(pk[i]);
+      link.lastMask = packed;
+      if (pk.length) logLine('> geometry: ' + pk.length + ' packet(s)', 'dim');
+    }).catch(function (e) { logLine(e.message, 'err'); });
+  }
+  function maskChanged() {
+    draw(); updateReadouts();
+    if ($('autoSend').checked) later('mask', function () { sendMask(false); }, 100);
+  }
+
+  async function syncAll() {
+    await sendParam('omega'); await sendParam('vel'); await sendParam('spf');
+    await sendParam('viz'); await sendParam('gain'); await sendParam('guard');
+    await sendMask(true);
+    logLine('settings and geometry sent', 'ok');
+  }
+
+  function showGuard(status, divs) {
+    var halted = (status & 4) !== 0;
+    $('haltBanner').hidden = !halted;
+    $('guardOut').textContent = !S.guard ? 'off' : halted ? 'STOPPED' : divs === 0 ? 'no blow-ups' : divs + ' automatic reset' + (divs === 1 ? '' : 's');
+  }
+
+  async function pollSteps() {
+    if (!link.connected) return;
+    try {
+      var lo = await getReg(C.REG.STEP_LO), hi = await getReg(C.REG.STEP_HI);
+      var status = await getReg(C.REG.STATUS), divs = await getReg(C.REG.DIV_COUNT);
+      showGuard(status, divs);
+      var steps = hi * 65536 + lo, now = performance.now();
+      $('stepOut').textContent = steps.toLocaleString();
+      if (link.lastSteps !== null && steps >= link.lastSteps && now > link.lastStepsT) {
+        $('rateOut').textContent = Math.round((steps - link.lastSteps) * 1000 / (now - link.lastStepsT)).toLocaleString() + ' steps/s';
+      }
+      link.lastSteps = steps; link.lastStepsT = now;
+    } catch (e) { /* a missed poll is not worth a log line */ }
+  }
+
+  async function openPort(port) {
+    var baud = Number($('baud').value);
+    await port.open({ baudRate: baud, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none' });
+    link.port = port; link.writer = port.writable.getWriter();
+    link.rx = []; link.lastMask = null; link.connected = true; link.lastSteps = null;
+    readLoop(port);
+    setStatus('warn', 'connected, checking FPGA…');
+    logLine('port open at ' + baud + ' baud');
+    try {
+      var ver = await doPing();
+      link.fpgaOk = ver >= 0;
+      if (link.fpgaOk) { setStatus('ok', 'FPGA answered (LBM v' + ver + ')'); logLine('FPGA answered: LBM v' + ver, 'ok'); }
+      else { setStatus('warn', 'port open, unexpected reply'); logLine('unexpected reply to ping', 'err'); }
+    } catch (e) {
+      link.fpgaOk = false;
+      setStatus('warn', 'port open, FPGA silent');
+      logLine('no reply to ping: check the bitstream is loaded and the baud rate matches (' + baud + ')', 'err');
+    }
+    await syncAll();
+    clearInterval(link.poll);
+    link.poll = setInterval(pollSteps, 1000);
+  }
+
+  async function connect() {
+    if (!('serial' in navigator)) { $('unsupported').style.display = 'block'; return; }
+    try {
+      var port = await navigator.serial.requestPort();
+      await openPort(port);
+    } catch (e) {
+      if (e.name !== 'NotFoundError') logLine('connect failed: ' + e.message, 'err');
+      await disconnect(true);
+    }
+  }
+  async function disconnect(silent) {
+    clearInterval(link.poll);
+    var port = link.port;
+    link.connected = false; link.port = null;
+    try { if (link.reader) await link.reader.cancel(); } catch (e) { /* ignore */ }
+    try { if (link.writer) { link.writer.releaseLock(); } } catch (e) { /* ignore */ }
+    try { if (port) await port.close(); } catch (e) { /* ignore */ }
+    link.writer = null; link.reader = null; link.rx = [];
+    setStatus('', 'not connected');
+    if (!silent) logLine('disconnected');
+  }
+
+  /* ---------------- geometry canvas ---------------- */
+  var cv = $('grid'), ctx = cv.getContext('2d');
+  var MAT_COLOUR = ['#0b1a33', '#9aa3ae', '#2ecc71', '#ff9f43'];
+
+  function draw() {
+    var x, y;
+    for (y = 0; y < NY; y++) {
+      for (x = 0; x < NX; x++) {
+        ctx.fillStyle = MAT_COLOUR[S.cells[y * NX + x]];
+        ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+      }
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (x = 0; x <= NX; x++) { ctx.moveTo(x * CELL + 0.5, 0); ctx.lineTo(x * CELL + 0.5, NY * CELL); }
+    for (y = 0; y <= NY; y++) { ctx.moveTo(0, y * CELL + 0.5); ctx.lineTo(NX * CELL, y * CELL + 0.5); }
+    ctx.stroke();
+    if (S.hover) {
+      ctx.fillStyle = 'rgba(76,194,255,0.45)';
+      var h = S.hover;
+      for (var i = 0; i < h.length; i++) if (h[i]) ctx.fillRect((i % NX) * CELL, Math.floor(i / NX) * CELL, CELL, CELL);
+    }
+  }
+
+  function cellAt(ev) {
+    var r = cv.getBoundingClientRect();
+    var x = Math.floor((ev.clientX - r.left) * NX / r.width);
+    var y = Math.floor((ev.clientY - r.top) * NY / r.height);
+    return { x: C.clamp(x, 0, NX - 1), y: C.clamp(y, 0, NY - 1) };
+  }
+  function pushUndo() {
+    S.undo.push(new Uint8Array(S.cells));
+    if (S.undo.length > 30) S.undo.shift();
+  }
+  function computeHover(c) {
+    if (S.tool === 'shape') {
+      S.hover = C.shapeCells(S.shape.kind, C.snap(c.x, S.shape.w), C.snap(c.y, S.shape.h), S.shape.w, S.shape.h, S.shape.ang);
+    } else {
+      var t = new Uint8Array(NX * NY);
+      C.brush(t, c.x, c.y, S.brush, 1);
+      S.hover = t;
+    }
+  }
+  function applyAt(c, erase) {
+    var val = erase ? C.FLUID : S.mat;
+    if (S.tool === 'shape') C.stamp(S.cells, S.shape.kind, C.snap(c.x, S.shape.w), C.snap(c.y, S.shape.h), S.shape.w, S.shape.h, S.shape.ang, val);
+    else C.brush(S.cells, c.x, c.y, S.brush, val);
+  }
+
+  cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  cv.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    cv.setPointerCapture(e.pointerId);
+    pushUndo();
+    S.drawing = e.button === 2 ? 'erase' : 'draw';
+    var c = cellAt(e);
+    S.lastCell = c.y * NX + c.x;
+    applyAt(c, S.drawing === 'erase');
+    computeHover(c); maskChanged();
+  });
+  cv.addEventListener('pointermove', function (e) {
+    var c = cellAt(e);
+    computeHover(c);
+    if (S.drawing && S.tool === 'paint' && c.y * NX + c.x !== S.lastCell) {
+      S.lastCell = c.y * NX + c.x;
+      applyAt(c, S.drawing === 'erase');
+      maskChanged();
+    } else {
+      draw();
+    }
+  });
+  cv.addEventListener('pointerup', function () { S.drawing = false; });
+  cv.addEventListener('pointercancel', function () { S.drawing = false; });
+  cv.addEventListener('pointerleave', function () { S.hover = null; draw(); });
+
+  function setCells(c) { pushUndo(); S.cells = c; maskChanged(); }
+
+  /* ---------------- controls ---------------- */
+  function setActive(group, attr, value) {
+    Array.prototype.forEach.call(group, function (b) { b.classList.toggle('on', b.getAttribute(attr) === String(value)); });
+  }
+  function setTool(t) {
+    S.tool = t;
+    $('toolPaint').classList.toggle('on', t === 'paint');
+    $('toolShape').classList.toggle('on', t === 'shape');
+    $('paintOpts').style.display = t === 'paint' ? '' : 'none';
+    $('shapeOpts').style.display = t === 'shape' ? '' : 'none';
+  }
+  $('toolPaint').addEventListener('click', function () { setTool('paint'); });
+  $('toolShape').addEventListener('click', function () { setTool('shape'); });
+
+  var matButtons = document.querySelectorAll('[data-mat]');
+  Array.prototype.forEach.call(matButtons, function (b) {
+    b.addEventListener('click', function () { S.mat = Number(b.getAttribute('data-mat')); setActive(matButtons, 'data-mat', S.mat); });
+  });
+
+  $('brush').addEventListener('input', function () { S.brush = Number(this.value); $('brushOut').textContent = this.value; });
+
+  function shapeLabels() {
+    var k = S.shape.kind;
+    $('shHLabel').textContent = k === 'airfoil' ? 'Thickness (cells)' : k === 'rect' ? 'Height / plate length (cells)' : 'Height (cells)';
+    $('shapeHelp').textContent = k === 'airfoil'
+      ? 'Rotation is the angle of attack. Click to stamp, right-click to cut.'
+      : 'Click to stamp, right-click to cut a hole.';
+  }
+  $('shapeKind').addEventListener('change', function () { S.shape.kind = this.value; shapeLabels(); });
+  [['shW', 'w', 'shWOut'], ['shH', 'h', 'shHOut'], ['shA', 'ang', 'shAOut']].forEach(function (t) {
+    $(t[0]).addEventListener('input', function () { S.shape[t[1]] = Number(this.value); $(t[2]).textContent = this.value; });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'), function (b) {
+    b.addEventListener('click', function () {
+      var name = b.getAttribute('data-preset');
+      setCells(C.presets[name]());
+      if (name === 'cavity') { S.ang = 0; $('uAng').value = 0; $('uAngOut').textContent = '0'; updateReadouts(); if (link.connected) sendParam('vel'); }
+      logLine('preset: ' + name);
+    });
+  });
+  $('btnClearObj').addEventListener('click', function () {
+    pushUndo();
+    for (var i = 0; i < S.cells.length; i++) {
+      var x = i % NX, y = Math.floor(i / NX);
+      if (S.cells[i] === C.SOLID && x > 0 && x < NX - 1 && y > 0 && y < NY - 1) S.cells[i] = C.FLUID;
+    }
+    maskChanged();
+  });
+  $('btnUndo').addEventListener('click', function () {
+    if (S.undo.length) { S.cells = S.undo.pop(); maskChanged(); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); $('btnUndo').click(); }
+  });
+  $('btnSendMask').addEventListener('click', function () { sendMask(true); });
+
+  $('btnImage').addEventListener('click', function () { $('fileImage').click(); });
+  $('fileImage').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    var img = new Image();
+    img.onload = function () {
+      var off = document.createElement('canvas'); off.width = NX; off.height = NY;
+      var o = off.getContext('2d');
+      o.fillStyle = '#fff'; o.fillRect(0, 0, NX, NY);
+      o.drawImage(img, 0, 0, NX, NY);
+      setCells(C.wallsFromImage(o.getImageData(0, 0, NX, NY).data));
+      logLine('image imported: dark pixels became walls');
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = function () { logLine('could not read that image', 'err'); };
+    img.src = URL.createObjectURL(f);
+    this.value = '';
+  });
+
+  /* ---- flow ---- */
+  function updateReadouts() {
+    $('uInOut').textContent = S.u.toFixed(3);
+    $('uAngOut').textContent = String(S.ang);
+    $('omegaOut').textContent = S.omega.toFixed(2);
+    var nu = C.nuFromOmega(S.omega), L = C.objectSize(S.cells);
+    $('nuOut').textContent = nu.toFixed(4);
+    $('lOut').textContent = L ? L + ' cells' : 'no object';
+    var ch = NY - 2, ref = L || ch;
+    $('reOut').textContent = S.u > 0 ? (S.u * ref / nu).toFixed(0) + (L ? '' : ' (channel width)') : '–';
+    var safe = C.uSafe(S.omega), st = $('stab');
+    if (S.u > safe) { st.className = 'chip warn'; st.textContent = 'may go unstable (try speed ≤ ' + safe.toFixed(2) + ')'; }
+    else { st.className = 'chip good'; st.textContent = 'stable region'; }
+  }
+  $('uIn').addEventListener('input', function () { S.u = Number(this.value); updateReadouts(); later('vel', function () { sendParam('vel'); }, 60); });
+  $('uAng').addEventListener('input', function () { S.ang = Number(this.value); updateReadouts(); later('vel', function () { sendParam('vel'); }, 60); });
+  $('omega').addEventListener('input', function () { S.omega = Number(this.value); updateReadouts(); later('omega', function () { sendParam('omega'); }, 60); });
+
+  /* ---- simulation ---- */
+  function updateRunButton() { $('btnRun').textContent = S.spf === 0 ? 'Run' : 'Pause'; }
+  $('spf').addEventListener('input', function () {
+    S.spf = Number(this.value); if (S.spf) S.spfBeforePause = S.spf;
+    $('spfOut').textContent = this.value; updateRunButton();
+    later('spf', function () { sendParam('spf'); }, 60);
+  });
+  $('btnRun').addEventListener('click', function () {
+    S.spf = S.spf === 0 ? (S.spfBeforePause || 16) : 0;
+    $('spf').value = S.spf; $('spfOut').textContent = String(S.spf); updateRunButton(); sendParam('spf');
+  });
+  $('guard').addEventListener('change', function () { S.guard = this.checked; sendParam('guard'); });
+  $('btnInit').addEventListener('click', function () { sendRaw(C.pktCmd(0), 're-initialise flow'); });
+  $('btnStep').addEventListener('click', function () { sendRaw(C.pktCmd(1), 'single step'); });
+
+  /* ---- display ---- */
+  var VIZ = [
+    { name: 'Full-scale speed', min: 0.03, max: 0.40, step: 0.01, lo: '0', help: 'Dark blue = still, red = fast.' },
+    { name: 'Full-scale density change (±)', min: 0.005, max: 0.15, step: 0.005, lo: '−', help: 'Red/yellow = compressed (high pressure), blue/cyan = rarefied (low pressure).' },
+    { name: 'Full-scale vorticity (±)', min: 0.01, max: 0.30, step: 0.01, lo: '−', help: 'Red/yellow = clockwise rotation on screen, blue/cyan = counter-clockwise.' }
+  ];
+  function drawLegend() {
+    var lg = $('legend'), c = lg.getContext('2d'), v, rgb;
+    for (var x = 0; x < 256; x++) {
+      rgb = C.palette(S.viz, x);
+      c.fillStyle = 'rgb(' + rgb[0] * 17 + ',' + rgb[1] * 17 + ',' + rgb[2] * 17 + ')';
+      c.fillRect(x, 0, 1, 1);
+    }
+    var fs = S.fs[S.viz];
+    $('legLo').textContent = S.viz === 0 ? '0' : '−' + fs.toFixed(3);
+    $('legMid').textContent = S.viz === 0 ? '' : '0';
+    $('legHi').textContent = (S.viz === 0 ? '' : '+') + fs.toFixed(3);
+    $('vizHelp').textContent = VIZ[S.viz].help;
+  }
+  function syncVizUi() {
+    var v = VIZ[S.viz], el = $('fs');
+    $('fsLabel').textContent = v.name;
+    el.min = v.min; el.max = v.max; el.step = v.step; el.value = S.fs[S.viz];
+    $('fsOut').textContent = S.fs[S.viz].toFixed(3);
+    setActive(document.querySelectorAll('[data-viz]'), 'data-viz', S.viz);
+    drawLegend();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-viz]'), function (b) {
+    b.addEventListener('click', function () { S.viz = Number(b.getAttribute('data-viz')); syncVizUi(); sendParam('viz'); });
+  });
+  $('fs').addEventListener('input', function () {
+    S.fs[S.viz] = Number(this.value); $('fsOut').textContent = S.fs[S.viz].toFixed(3); drawLegend();
+    later('gain', function () { sendParam('gain'); }, 60);
+  });
+
+  /* ---- link buttons ---- */
+  $('btnConnect').addEventListener('click', function () { if (link.connected) disconnect(); else connect(); });
+  $('btnPing').addEventListener('click', async function () {
+    if (!link.connected) { logLine('not connected', 'err'); return; }
+    try { var v = await doPing(); logLine(v >= 0 ? 'FPGA answered: LBM v' + v : 'unexpected reply', v >= 0 ? 'ok' : 'err'); }
+    catch (e) { logLine(e.message, 'err'); }
+  });
+  $('btnSyncAll').addEventListener('click', function () { if (link.connected) syncAll(); else logLine('not connected', 'err'); });
+
+  if ('serial' in navigator) {
+    navigator.serial.addEventListener('disconnect', function (e) {
+      if (e.target === link.port) { logLine('USB serial device unplugged', 'err'); disconnect(true); }
+    });
+  } else {
+    $('unsupported').style.display = 'block';
+    $('btnConnect').disabled = true;
+  }
+
+  /* ---------------- start ---------------- */
+  shapeLabels(); syncVizUi(); updateReadouts(); updateRunButton(); draw();
+  logLine('ready. The board boots with a cylinder in a channel; connect to change it.', 'dim');
+})();
+</script>
+</body>
+</html>
